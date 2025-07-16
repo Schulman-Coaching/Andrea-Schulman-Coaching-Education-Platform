@@ -1,0 +1,497 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          UserRole  @default(USER)
+  
+  // Profile Information
+  firstName     String?
+  lastName      String?
+  phone         String?
+  dateOfBirth   DateTime?
+  location      String?
+  timezone      String?
+  language      String    @default("en")
+  
+  // User Segmentation
+  userType      UserType?
+  lifeStage     LifeStage?
+  seminary      String?
+  community     String?
+  
+  // Preferences
+  communicationPrefs Json?
+  notifications      Json?
+  
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastLoginAt   DateTime?
+  
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  bookings      Booking[]
+  enrollments   Enrollment[]
+  subscriptions Subscription[]
+  payments      Payment[]
+  posts         Post[]
+  comments      Comment[]
+  messages      Message[]
+  
+  @@map("users")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Service {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  type        ServiceType
+  category    String
+  
+  // Pricing
+  price       Decimal
+  currency    String      @default("USD")
+  duration    Int?        // in minutes
+  
+  // Availability
+  isActive    Boolean     @default(true)
+  maxCapacity Int?
+  
+  // Content
+  content     Json?
+  resources   Json?
+  
+  // Timestamps
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relations
+  bookings    Booking[]
+  enrollments Enrollment[]
+  
+  @@map("services")
+}
+
+model Booking {
+  id          String        @id @default(cuid())
+  userId      String
+  serviceId   String
+  
+  // Scheduling
+  scheduledAt DateTime
+  duration    Int           // in minutes
+  timezone    String
+  status      BookingStatus @default(PENDING)
+  
+  // Meeting Details
+  zoomMeetingId String?
+  zoomJoinUrl   String?
+  zoomPassword  String?
+  
+  // Payment
+  paymentId   String?
+  amount      Decimal
+  currency    String        @default("USD")
+  
+  // Notes
+  notes       String?
+  adminNotes  String?
+  
+  // Timestamps
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Relations
+  user        User          @relation(fields: [userId], references: [id])
+  service     Service       @relation(fields: [serviceId], references: [id])
+  payment     Payment?      @relation(fields: [paymentId], references: [id])
+  
+  @@map("bookings")
+}
+
+model Course {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  slug        String   @unique
+  
+  // Content
+  content     Json?
+  modules     Module[]
+  
+  // Pricing
+  price       Decimal
+  currency    String   @default("USD")
+  
+  // Settings
+  isPublished Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  enrollments Enrollment[]
+  
+  @@map("courses")
+}
+
+model Module {
+  id          String   @id @default(cuid())
+  courseId    String
+  title       String
+  description String?
+  order       Int
+  
+  // Content
+  content     Json?
+  videoUrl    String?
+  resources   Json?
+  
+  // Settings
+  isPublished Boolean  @default(false)
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+  
+  @@map("modules")
+}
+
+model Lesson {
+  id          String   @id @default(cuid())
+  moduleId    String
+  title       String
+  description String?
+  order       Int
+  
+  // Content
+  content     Json?
+  videoUrl    String?
+  duration    Int?     // in minutes
+  resources   Json?
+  
+  // Settings
+  isPublished Boolean  @default(false)
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  module      Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  
+  @@map("lessons")
+}
+
+model Enrollment {
+  id          String           @id @default(cuid())
+  userId      String
+  serviceId   String?
+  courseId    String?
+  
+  // Progress
+  status      EnrollmentStatus @default(ACTIVE)
+  progress    Json?
+  completedAt DateTime?
+  
+  // Payment
+  paymentId   String?
+  amount      Decimal
+  currency    String           @default("USD")
+  
+  // Timestamps
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  
+  // Relations
+  user        User             @relation(fields: [userId], references: [id])
+  service     Service?         @relation(fields: [serviceId], references: [id])
+  course      Course?          @relation(fields: [courseId], references: [id])
+  payment     Payment?         @relation(fields: [paymentId], references: [id])
+  
+  @@map("enrollments")
+}
+
+model Subscription {
+  id          String             @id @default(cuid())
+  userId      String
+  
+  // Subscription Details
+  type        SubscriptionType
+  status      SubscriptionStatus @default(ACTIVE)
+  
+  // Billing
+  stripeSubscriptionId String?
+  amount      Decimal
+  currency    String             @default("USD")
+  interval    String             // monthly, yearly
+  
+  // Dates
+  startDate   DateTime
+  endDate     DateTime?
+  cancelledAt DateTime?
+  
+  // Timestamps
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  
+  // Relations
+  user        User               @relation(fields: [userId], references: [id])
+  payments    Payment[]
+  
+  @@map("subscriptions")
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  userId      String
+  
+  // Payment Details
+  stripePaymentIntentId String?
+  amount      Decimal
+  currency    String        @default("USD")
+  status      PaymentStatus @default(PENDING)
+  
+  // Metadata
+  description String?
+  metadata    Json?
+  
+  // Timestamps
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Relations
+  user         User           @relation(fields: [userId], references: [id])
+  bookings     Booking[]
+  enrollments  Enrollment[]
+  subscription Subscription?
+  
+  @@map("payments")
+}
+
+model Post {
+  id          String      @id @default(cuid())
+  title       String
+  content     String
+  slug        String      @unique
+  excerpt     String?
+  
+  // Publishing
+  isPublished Boolean     @default(false)
+  publishedAt DateTime?
+  
+  // SEO
+  metaTitle   String?
+  metaDescription String?
+  
+  // Author
+  authorId    String
+  
+  // Categories
+  category    String?
+  tags        String[]
+  
+  // Timestamps
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relations
+  author      User        @relation(fields: [authorId], references: [id])
+  comments    Comment[]
+  
+  @@map("posts")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  postId    String
+  authorId  String
+  
+  // Moderation
+  isApproved Boolean @default(false)
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id])
+  
+  @@map("comments")
+}
+
+model Message {
+  id          String      @id @default(cuid())
+  content     String
+  senderId    String
+  recipientId String?
+  
+  // Message Details
+  type        MessageType @default(DIRECT)
+  channel     String?     // for group messages
+  
+  // Status
+  isRead      Boolean     @default(false)
+  readAt      DateTime?
+  
+  // Timestamps
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relations
+  sender      User        @relation(fields: [senderId], references: [id])
+  
+  @@map("messages")
+}
+
+model Newsletter {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  firstName   String?
+  lastName    String?
+  
+  // Preferences
+  isActive    Boolean  @default(true)
+  preferences Json?
+  
+  // Timestamps
+  subscribedAt DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@map("newsletter")
+}
+
+// Enums
+enum UserRole {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+enum UserType {
+  POST_SEMINARY
+  ENGAGED
+  NEWLYWED
+  COMMUNITY_MEMBER
+}
+
+enum LifeStage {
+  POST_SEMINARY
+  DATING
+  ENGAGED
+  NEWLYWED
+  YOUNG_MOTHER
+  ESTABLISHED
+}
+
+enum ServiceType {
+  INDIVIDUAL_COACHING
+  GROUP_PROGRAM
+  DIGITAL_COURSE
+  LIVE_EVENT
+  MEMBERSHIP
+  CONSULTATION
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  PAUSED
+}
+
+enum SubscriptionType {
+  BASIC
+  PREMIUM
+  VIP
+  COMMUNITY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  PAUSED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum MessageType {
+  DIRECT
+  GROUP
+  ANNOUNCEMENT
+  SYSTEM
+}
